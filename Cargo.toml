@@ -1,0 +1,7 @@
+[workspace]
+members = [
+    "aoc-core",
+    "aoc-day01",
+]
+
+resolver = "2"
