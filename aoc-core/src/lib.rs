@@ -1,5 +1,5 @@
 pub mod from_file;
-pub mod puzzle;
+pub mod opt;
 
 pub use from_file::FromFile;
-pub use puzzle::PuzzlePart;
+pub use opt::{Opt, PuzzlePart};
