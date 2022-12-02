@@ -71,6 +71,6 @@ impl FromFile for ElfGroup {
                 Ok(elves)
             })?;
 
-        Ok(ElfGroup { elves })
+        Ok(Self { elves })
     }
 }
