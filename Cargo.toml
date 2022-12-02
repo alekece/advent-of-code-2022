@@ -2,6 +2,7 @@
 members = [
     "aoc-core",
     "aoc-day01",
+    "aoc-day02",
 ]
 
 resolver = "2"
