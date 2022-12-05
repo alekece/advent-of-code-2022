@@ -10,8 +10,8 @@ pub struct Item(u8);
 impl Item {
     pub fn get_priority(&self) -> usize {
         match self.0 as char {
-            'a'..='z' => (self.0 - 'a' as u8 + 1) as usize,
-            'A'..='Z' => (self.0 - 'A' as u8 + 27) as usize,
+            'a'..='z' => (self.0 - b'a' + 1) as usize,
+            'A'..='Z' => (self.0 - b'A' + 27) as usize,
             _ => unreachable!(),
         }
     }
@@ -55,11 +55,7 @@ impl FromStr for Rucksack {
 
 impl Rucksack {
     pub fn find_misplaced_item(&self) -> Option<Item> {
-        for item in &self.compartments[0] & &self.compartments[1] {
-            return Some(item);
-        }
-
-        None
+        (&self.compartments[0] & &self.compartments[1]).into_iter().next()
     }
 
     pub fn get_all_items(&self) -> HashSet<Item> {
@@ -84,9 +80,9 @@ impl Solver {
             .collect::<Result<Vec<_>>>()?;
 
         if rucksacks.len() % 3 != 0 {
-            Err(Error::ParsingError(format!(
-                "elf group must strictly contain 3 members"
-            )))
+            Err(Error::ParsingError(
+                "elf group must strictly contain 3 members".to_string(),
+            ))
         } else {
             Ok(Self { rucksacks })
         }
@@ -106,8 +102,7 @@ impl Solve for Solver {
             PuzzlePart::Two => {
                 self.rucksacks
                     .chunks_exact(3)
-                    .map(|x| &(&x[0].get_all_items() & &x[1].get_all_items()) & &x[2].get_all_items())
-                    .flatten()
+                    .flat_map(|x| &(&x[0].get_all_items() & &x[1].get_all_items()) & &x[2].get_all_items())
                     .map(|item| item.get_priority())
                     .sum::<usize>()
                     .to_string()

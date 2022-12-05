@@ -9,11 +9,11 @@ pub struct Section(RangeInclusive<usize>);
 
 impl Section {
     pub fn contains(&self, other: &Section) -> bool {
-        self.0.start() <= other.0.start() && self.0.end() >= &other.0.end()
+        self.0.start() <= other.0.start() && self.0.end() >= other.0.end()
     }
 
     pub fn overlap(&self, other: &Section) -> bool {
-        self.0.contains(&other.0.start()) || self.0.contains(&other.0.end())
+        self.0.contains(other.0.start()) || self.0.contains(other.0.end())
     }
 }
 

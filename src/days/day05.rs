@@ -37,9 +37,7 @@ impl CrateMover9001 {
     ) -> HashMap<usize, Vec<char>> {
         for instruction in instructions.iter() {
             let stack = stacks.get_mut(&instruction.from_stack).unwrap();
-            let mut crates = stack
-                .drain(stack.len() - instruction.quantity..)
-                .collect::<Vec<_>>();
+            let mut crates = stack.drain(stack.len() - instruction.quantity..).collect::<Vec<_>>();
 
             let stack = stacks.get_mut(&instruction.to_stack).unwrap();
             stack.append(&mut crates);
@@ -79,9 +77,9 @@ impl FromStr for Instruction {
             .collect::<Result<Vec<_>>>()?;
 
         if values.len() != 3 {
-            Err(Error::ParsingError(format!(
-                "invalid instruction (expected format 'move x from y to z')"
-            )))
+            Err(Error::ParsingError(
+                "invalid instruction (expected format 'move x from y to z')".to_string(),
+            ))
         } else {
             Ok(Self {
                 quantity: values[0],
@@ -103,7 +101,7 @@ impl Solver {
 
         let (stacks, instructions): (Vec<_>, Vec<_>) = reader
             .lines()
-            .map(|line| Ok(line?.to_string()))
+            .map(|line| Ok(line?))
             .collect::<Result<Vec<_>>>()?
             .into_iter()
             .partition(|line| {
@@ -116,7 +114,7 @@ impl Solver {
 
         let stacks = stacks
             .into_iter()
-            .map(|line| {
+            .flat_map(|line| {
                 let mut counter = 0;
 
                 line.split(|_| {
@@ -133,7 +131,6 @@ impl Solver {
                 })
                 .collect::<Vec<_>>()
             })
-            .flatten()
             .rev()
             .fold(HashMap::<usize, Vec<char>>::default(), |mut acc, (key, c)| {
                 acc.entry(key + 1).or_default().push(c);
