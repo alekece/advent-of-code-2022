@@ -1,8 +1,13 @@
-[workspace]
-members = [
-    "aoc-core",
-    "aoc-day01",
-    "aoc-day02",
-]
+[package]
+name = "advent-of-code-2022 "
+version = "0.1.0"
+edition = "2021"
+authors = ["Alexis Le Provost <alexis.leprovost@outlook.com>"]
 
-resolver = "2"
+[dependencies]
+thiserror = "1.0.37"
+eyre = "0.6.8"
+color-eyre = "0.6.2"
+clap = { version = "4.0.29", features = ["derive"] }
+itertools = "0.10.5"
+enum_dispatch = "0.3.8"

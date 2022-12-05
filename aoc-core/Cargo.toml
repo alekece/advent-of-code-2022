@@ -1,8 +1,0 @@
-[package]
-name = "aoc-core"
-version = "0.1.0"
-edition = "2021"
-authors = ["Alexis Le Provost <alexis.leprovost@outlook.com>"]
-
-[dependencies]
-clap = { version = "4.0.29", features = ["derive"] }

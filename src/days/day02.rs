@@ -1,19 +1,7 @@
-use std::fs::File;
-use std::io::{self, BufRead, BufReader};
+use std::io::{BufRead, BufReader, Read};
 use std::str::FromStr;
 
-use aoc_core::FromFile;
-use thiserror::Error;
-
-#[derive(Debug, Error)]
-pub enum Error {
-    #[error(transparent)]
-    IoError(#[from] io::Error),
-    #[error("Invalid choice '{0}'")]
-    InvalidChoice(String),
-    #[error("Invalid round '{0}'")]
-    InvalidRound(String),
-}
+use crate::solver::{Error, PuzzlePart, Result, Solve};
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 #[repr(u8)]
@@ -51,12 +39,12 @@ impl Choice {
 impl FromStr for Choice {
     type Err = Error;
 
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
+    fn from_str(s: &str) -> Result<Self> {
         match s {
             "A" | "X" => Ok(Self::Rock),
             "B" | "Y" => Ok(Self::Paper),
             "C" | "Z" => Ok(Self::Scissors),
-            _ => Err(Error::InvalidChoice(s.to_string())),
+            _ => Err(Error::ParsingError(format!("invalid choice '{s}'"))),
         }
     }
 }
@@ -72,12 +60,12 @@ pub enum RoundResult {
 impl FromStr for RoundResult {
     type Err = Error;
 
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
+    fn from_str(s: &str) -> Result<Self> {
         match s {
             "X" => Ok(Self::Lost),
             "Y" => Ok(Self::Draw),
             "Z" => Ok(Self::Won),
-            _ => Err(Error::InvalidRound(s.to_string())),
+            _ => Err(Error::ParsingError(format!("invalid round '{s}'"))),
         }
     }
 }
@@ -90,7 +78,7 @@ pub struct PossibleAction {
 impl FromStr for PossibleAction {
     type Err = Error;
 
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
+    fn from_str(s: &str) -> Result<Self> {
         Ok(Self {
             round_result: s.parse::<RoundResult>()?,
             choice: s.parse::<Choice>()?,
@@ -108,57 +96,59 @@ impl From<(Choice, Choice)> for RoundResult {
     }
 }
 
-pub struct GameSolver {
+pub struct Solver {
     rounds: Vec<(Choice, PossibleAction)>,
 }
 
-impl GameSolver {
-    pub fn follow_elf_strategy(&self) -> u32 {
-        self.rounds
-            .iter()
-            .map(|(a, b)| (*a, b.choice))
-            .fold(0u32, |acc, (a, b)| acc + RoundResult::from((a, b)) as u32 + b as u32)
-    }
-
-    pub fn follow_fixed_elf_strategy(&self) -> u32 {
-        self.rounds
-            .iter()
-            .map(|(a, b)| {
-                {
-                    let b = match b.round_result {
-                        RoundResult::Won => a.get_weakness(),
-                        RoundResult::Draw => *a,
-                        RoundResult::Lost => a.get_resistance(),
-                    };
-
-                    (*a, b)
-                }
-            })
-            .fold(0u32, |acc, (a, b)| acc + RoundResult::from((a, b)) as u32 + b as u32)
-    }
-}
-
-impl FromFile for GameSolver {
-    type Error = Error;
-
-    fn from_file(path: &std::path::Path) -> Result<Self, Self::Error>
-    where
-        Self: Sized,
-    {
-        let file = File::open(path)?;
-        let reader = BufReader::new(file).lines();
-
+impl Solver {
+    pub fn from_reader<R: Read>(reader: BufReader<R>) -> Result<Self> {
         let rounds = reader
+            .lines()
             .into_iter()
             .map(|line| {
                 let line = line?;
 
                 line.split_once(' ')
-                    .ok_or_else(|| Error::InvalidRound(line.clone()))
+                    .ok_or_else(|| Error::ParsingError(format!("invalid input '{line}'")))
                     .and_then(|(a, b)| Ok((a.parse()?, b.parse()?)))
             })
-            .collect::<Result<Vec<_>, _>>()?;
+            .collect::<Result<Vec<_>>>()?;
 
         Ok(Self { rounds })
     }
+}
+
+impl Solve for Solver {
+    fn solve(&self, puzzle_part: PuzzlePart) -> String {
+        match puzzle_part {
+            PuzzlePart::One => {
+                self.rounds
+                    .iter()
+                    .map(|(a, b)| (*a, b.choice))
+                    .fold(0u32, compute_round)
+                    .to_string()
+            }
+            PuzzlePart::Two => {
+                self.rounds
+                    .iter()
+                    .map(|(a, b)| {
+                        {
+                            let b = match b.round_result {
+                                RoundResult::Won => a.get_weakness(),
+                                RoundResult::Draw => *a,
+                                RoundResult::Lost => a.get_resistance(),
+                            };
+
+                            (*a, b)
+                        }
+                    })
+                    .fold(0u32, compute_round)
+                    .to_string()
+            }
+        }
+    }
+}
+
+fn compute_round(acc: u32, (a, b): (Choice, Choice)) -> u32 {
+    acc + RoundResult::from((a, b)) as u32 + b as u32
 }
