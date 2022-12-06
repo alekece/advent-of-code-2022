@@ -23,7 +23,11 @@ impl FromStr for Section {
     fn from_str(s: &str) -> Result<Self> {
         match s.split_once('-') {
             Some((a, b)) => Ok(Self(a.parse()?..=b.parse()?)),
-            None => Err(Error::ParsingError(format!("invalid section '{s}'"))),
+            None => {
+                Err(Error::InvalidInput(format!(
+                    "wrong section: expected '{{0-9}}+-{{0-9}}+' (got '{s}')"
+                )))
+            }
         }
     }
 }
@@ -47,7 +51,11 @@ impl FromStr for PeerCleaning {
     fn from_str(s: &str) -> Result<Self> {
         match s.split_once(',') {
             Some((a, b)) => Ok(Self(a.parse()?, b.parse()?)),
-            None => Err(Error::ParsingError(format!("invalid peer cleaning '{s}'"))),
+            None => {
+                Err(Error::InvalidInput(format!(
+                    "invalid peer cleaning: expected '{{0-9}}+-{{0-9}},{{0-9}}+-{{0-9}}+' (got '{s}')"
+                )))
+            }
         }
     }
 }
@@ -64,26 +72,32 @@ impl Solver {
             .map(|line| line?.parse())
             .collect::<Result<Vec<_>>>()?;
 
-        Ok(Self { peer_cleanings })
+        if peer_cleanings.is_empty() {
+            Err(Error::EmptyInput)
+        } else {
+            Ok(Self { peer_cleanings })
+        }
     }
 }
 
 impl Solve for Solver {
-    fn solve(&self, puzzle_part: PuzzlePart) -> String {
+    fn solve(&self, puzzle_part: PuzzlePart) -> Result<String> {
         match puzzle_part {
             PuzzlePart::One => {
-                self.peer_cleanings
+                Ok(self
+                    .peer_cleanings
                     .iter()
                     .filter(|peer_cleaning| peer_cleaning.is_fully_overlapping())
                     .count()
-                    .to_string()
+                    .to_string())
             }
             PuzzlePart::Two => {
-                self.peer_cleanings
+                Ok(self
+                    .peer_cleanings
                     .iter()
                     .filter(|peer_cleaning| peer_cleaning.is_overlapping())
                     .count()
-                    .to_string()
+                    .to_string())
             }
         }
     }

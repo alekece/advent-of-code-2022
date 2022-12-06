@@ -1,5 +1,6 @@
 use std::io::{BufRead, BufReader, Read};
 
+use eyre::Context;
 use itertools::Itertools;
 
 use crate::solver::{Error, PuzzlePart, Result, Solve};
@@ -25,33 +26,45 @@ pub struct Solver {
 
 impl Solver {
     pub fn from_reader<R: Read>(reader: BufReader<R>) -> Result<Self> {
-        let elves = reader
-            .lines()
-            .into_iter()
-            .fold(Ok::<_, Error>(vec![Elf::default()]), |elves, line| {
-                let (mut elves, line) = (elves?, line?);
+        let elves =
+            reader
+                .lines()
+                .into_iter()
+                .fold(Ok::<_, Error>(vec![Elf::default()]), |elves, line| {
+                    let (mut elves, line) = (elves?, line?);
 
-                if line.is_empty() {
-                    elves.push(Elf::default());
-                } else {
-                    let elf = elves.last_mut().unwrap();
-                    elf.add_food(line.parse()?);
-                }
+                    if line.is_empty() {
+                        elves.push(Elf::default());
+                    } else {
+                        // 'unwrap' call is safe since there is always at least
+                        // one elf group in accumulator.
+                        let elf = elves.last_mut().unwrap();
 
-                Ok(elves)
-            })?;
+                        elf.add_food(line.parse().wrap_err_with(|| {
+                            format!("calories must be a valid unsigned integer value (got '{line}')")
+                        })?);
+                    }
 
-        Ok(Self { elves })
+                    Ok(elves)
+                })?;
+
+        if elves.is_empty() {
+            Err(Error::EmptyInput)
+        } else {
+            Ok(Self { elves })
+        }
     }
 }
 
 impl Solve for Solver {
-    fn solve(&self, puzzle_part: PuzzlePart) -> String {
+    fn solve(&self, puzzle_part: PuzzlePart) -> Result<String> {
         let calories = self.elves.iter().map(Elf::total_calories);
 
-        match puzzle_part {
+        let solution = match puzzle_part {
             PuzzlePart::One => calories.max().unwrap_or_default().to_string(),
             PuzzlePart::Two => calories.sorted().rev().take(3).sum::<usize>().to_string(),
-        }
+        };
+
+        Ok(solution)
     }
 }

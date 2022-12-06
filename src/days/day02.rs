@@ -44,7 +44,11 @@ impl FromStr for Choice {
             "A" | "X" => Ok(Self::Rock),
             "B" | "Y" => Ok(Self::Paper),
             "C" | "Z" => Ok(Self::Scissors),
-            _ => Err(Error::ParsingError(format!("invalid choice '{s}'"))),
+            _ => {
+                Err(Error::InvalidInput(format!(
+                    "wrong round choice: expected '{{A|B|C|X|Y|Z}}' (got '{s}')"
+                )))
+            }
         }
     }
 }
@@ -65,7 +69,11 @@ impl FromStr for RoundResult {
             "X" => Ok(Self::Lost),
             "Y" => Ok(Self::Draw),
             "Z" => Ok(Self::Won),
-            _ => Err(Error::ParsingError(format!("invalid round '{s}'"))),
+            _ => {
+                Err(Error::InvalidInput(format!(
+                    "wrong round result: expected '{{X|Y|Z}}' (got '{s}')"
+                )))
+            }
         }
     }
 }
@@ -80,8 +88,8 @@ impl FromStr for PossibleAction {
 
     fn from_str(s: &str) -> Result<Self> {
         Ok(Self {
-            round_result: s.parse::<RoundResult>()?,
-            choice: s.parse::<Choice>()?,
+            choice: s.parse()?,
+            round_result: s.parse()?,
         })
     }
 }
@@ -96,8 +104,20 @@ impl From<(Choice, Choice)> for RoundResult {
     }
 }
 
+pub struct Round(Choice, PossibleAction);
+
+impl FromStr for Round {
+    type Err = Error;
+
+    fn from_str(s: &str) -> Result<Self> {
+        s.split_once(' ')
+            .ok_or_else(|| Error::InvalidInput(format!("wrong round: expected '{{A|B|C}} {{X|Y|Z}}' (got '{s}'")))
+            .and_then(|(a, b)| Ok(Self(a.parse()?, b.parse()?)))
+    }
+}
+
 pub struct Solver {
-    rounds: Vec<(Choice, PossibleAction)>,
+    rounds: Vec<Round>,
 }
 
 impl Solver {
@@ -105,45 +125,45 @@ impl Solver {
         let rounds = reader
             .lines()
             .into_iter()
-            .map(|line| {
-                let line = line?;
-
-                line.split_once(' ')
-                    .ok_or_else(|| Error::ParsingError(format!("invalid input '{line}'")))
-                    .and_then(|(a, b)| Ok((a.parse()?, b.parse()?)))
-            })
+            .map(|line| line?.parse())
             .collect::<Result<Vec<_>>>()?;
 
-        Ok(Self { rounds })
+        if rounds.is_empty() {
+            Err(Error::EmptyInput)
+        } else {
+            Ok(Self { rounds })
+        }
     }
 }
 
 impl Solve for Solver {
-    fn solve(&self, puzzle_part: PuzzlePart) -> String {
+    fn solve(&self, puzzle_part: PuzzlePart) -> Result<String> {
         match puzzle_part {
             PuzzlePart::One => {
-                self.rounds
+                Ok(self
+                    .rounds
                     .iter()
-                    .map(|(a, b)| (*a, b.choice))
+                    .map(|round| (round.0, round.1.choice))
                     .fold(0u32, compute_round)
-                    .to_string()
+                    .to_string())
             }
             PuzzlePart::Two => {
-                self.rounds
+                Ok(self
+                    .rounds
                     .iter()
-                    .map(|(a, b)| {
+                    .map(|round| {
                         {
-                            let b = match b.round_result {
-                                RoundResult::Won => a.get_weakness(),
-                                RoundResult::Draw => *a,
-                                RoundResult::Lost => a.get_resistance(),
+                            let choice = match round.1.round_result {
+                                RoundResult::Won => round.0.get_weakness(),
+                                RoundResult::Draw => round.0,
+                                RoundResult::Lost => round.0.get_resistance(),
                             };
 
-                            (*a, b)
+                            (round.0, choice)
                         }
                     })
                     .fold(0u32, compute_round)
-                    .to_string()
+                    .to_string())
             }
         }
     }

@@ -28,8 +28,9 @@ fn main() -> Result<()> {
     let file = format!("./data/{file_prefix}_day{:0width$}", opt.day, width = 2);
 
     let solver = Solver::from_file(Path::new(&file), opt.day)?;
+    let solution = solver.solve(opt.puzzle_part)?;
 
-    println!("{}", solver.solve(opt.puzzle_part));
+    println!("{solution}");
 
     Ok(())
 }

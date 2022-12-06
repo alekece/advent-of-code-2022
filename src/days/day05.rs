@@ -2,48 +2,28 @@ use std::collections::HashMap;
 use std::io::{BufRead, BufReader, Read};
 use std::str::FromStr;
 
+use eyre::Context;
 use itertools::Itertools;
 
 use crate::solver::{Error, PuzzlePart, Result, Solve};
 
+pub trait CrateMover {
+    fn grab_crates(&self, stack: &mut Vec<char>, quantity: usize) -> Vec<char>;
+}
+
 pub struct CrateMover9000;
 
-impl CrateMover9000 {
-    pub fn move_crates(
-        mut stacks: HashMap<usize, Vec<char>>,
-        instructions: &[Instruction],
-    ) -> HashMap<usize, Vec<char>> {
-        for instruction in instructions.iter() {
-            let stack = stacks.get_mut(&instruction.from_stack).unwrap();
-            let mut crates = stack
-                .drain(stack.len() - instruction.quantity..)
-                .rev()
-                .collect::<Vec<_>>();
-
-            let stack = stacks.get_mut(&instruction.to_stack).unwrap();
-            stack.append(&mut crates);
-        }
-
-        stacks
+impl CrateMover for CrateMover9000 {
+    fn grab_crates(&self, stack: &mut Vec<char>, quantity: usize) -> Vec<char> {
+        stack.drain(stack.len() - quantity..).rev().collect()
     }
 }
 
 pub struct CrateMover9001;
 
-impl CrateMover9001 {
-    pub fn move_crates(
-        mut stacks: HashMap<usize, Vec<char>>,
-        instructions: &[Instruction],
-    ) -> HashMap<usize, Vec<char>> {
-        for instruction in instructions.iter() {
-            let stack = stacks.get_mut(&instruction.from_stack).unwrap();
-            let mut crates = stack.drain(stack.len() - instruction.quantity..).collect::<Vec<_>>();
-
-            let stack = stacks.get_mut(&instruction.to_stack).unwrap();
-            stack.append(&mut crates);
-        }
-
-        stacks
+impl CrateMover for CrateMover9001 {
+    fn grab_crates(&self, stack: &mut Vec<char>, quantity: usize) -> Vec<char> {
+        stack.drain(stack.len() - quantity..).collect()
     }
 }
 
@@ -66,20 +46,24 @@ impl FromStr for Instruction {
             .filter_map(|(i, s)| {
                 match TOKENS[i] {
                     Some(token) if token != s => {
-                        Some(Err(Error::ParsingError(format!(
-                            "invalid instruction: expected token '{token}' (got '{s}')"
+                        Some(Err(Error::InvalidInput(format!(
+                            "wrong instruction: expected token '{token}' (got '{s}')"
                         ))))
                     }
-                    None => Some(s.parse::<usize>().map_err(Into::into)),
+                    None => Some(s.parse::<usize>()
+                                    .wrap_err_with(||
+                                       format!("wrong instruction: quantity or stack indice must be a valid unsigned integer value (got '{s}')")
+                                    )
+                                    .map_err(Into::into)),
                     _ => None,
                 }
             })
             .collect::<Result<Vec<_>>>()?;
 
         if values.len() != 3 {
-            Err(Error::ParsingError(
-                "invalid instruction (expected format 'move x from y to z')".to_string(),
-            ))
+            Err(Error::InvalidInput(format!(
+                "wrong instruction: expected 'move {{0-9}}+ from {{0-9}}+ to {{0-9}}+' (got '{s}')"
+            )))
         } else {
             Ok(Self {
                 quantity: values[0],
@@ -111,6 +95,10 @@ impl Solver {
 
                 is_stack
             });
+
+        if stacks.is_empty() && instructions.is_empty() {
+            return Err(Error::EmptyInput);
+        }
 
         let stacks = stacks
             .into_iter()
@@ -147,19 +135,48 @@ impl Solver {
 
         Ok(Self { stacks, instructions })
     }
+
+    pub fn move_crates(&self, mover: impl CrateMover) -> Result<HashMap<usize, Vec<char>>> {
+        let mut stacks = self.stacks.clone();
+
+        for instruction in self.instructions.iter() {
+            let stack = stacks
+                .get_mut(&instruction.from_stack)
+                .ok_or_else(|| Error::NoSolution(format!("stack '{}' does not exist", instruction.from_stack)))?;
+
+            if stack.len() < instruction.quantity {
+                return Err(Error::NoSolution(format!(
+                    "cannot move {0} crate(s) from stack '{1}': stack '{1}' contains only {2} crate(s)",
+                    instruction.quantity,
+                    instruction.from_stack,
+                    stack.len()
+                )));
+            }
+
+            let mut crates = mover.grab_crates(stack, instruction.quantity);
+
+            let stack = stacks
+                .get_mut(&instruction.to_stack)
+                .ok_or_else(|| Error::NoSolution(format!("stack '{}' does not exist", instruction.to_stack)))?;
+
+            stack.append(&mut crates);
+        }
+
+        Ok(stacks)
+    }
 }
 
 impl Solve for Solver {
-    fn solve(&self, puzzle_part: PuzzlePart) -> String {
+    fn solve(&self, puzzle_part: PuzzlePart) -> Result<String> {
         let stacks = match puzzle_part {
-            PuzzlePart::One => CrateMover9000::move_crates(self.stacks.clone(), &self.instructions),
-            PuzzlePart::Two => CrateMover9001::move_crates(self.stacks.clone(), &self.instructions),
-        };
+            PuzzlePart::One => self.move_crates(CrateMover9000),
+            PuzzlePart::Two => self.move_crates(CrateMover9001),
+        }?;
 
-        stacks
+        Ok(stacks
             .into_iter()
             .sorted_by_key(|(key, _)| *key)
-            .map(|(_, crates)| *crates.last().unwrap())
-            .collect()
+            .filter_map(|(_, crates)| crates.last().copied())
+            .collect())
     }
 }

@@ -5,6 +5,7 @@ use std::path::Path;
 
 use clap::ValueEnum;
 use enum_dispatch::enum_dispatch;
+use eyre::Context;
 use thiserror::Error;
 
 use crate::days::*;
@@ -12,13 +13,19 @@ use crate::days::*;
 #[derive(Debug, Error)]
 pub enum Error {
     #[error(transparent)]
+    EyreReport(#[from] eyre::ErrReport),
+    #[error(transparent)]
     IoError(#[from] io::Error),
     #[error(transparent)]
     ParseIntError(#[from] num::ParseIntError),
     #[error("Unimplemented day {0}")]
     UnimplementedDay(u16),
-    #[error("Parsing error: {0}")]
-    ParsingError(String),
+    #[error("Invalid input: {0}")]
+    InvalidInput(String),
+    #[error("No solution found: {0}")]
+    NoSolution(String),
+    #[error("Empty input")]
+    EmptyInput,
 }
 
 pub type Result<T> = std::result::Result<T, Error>;
@@ -41,12 +48,12 @@ pub enum Solver {
 
 #[enum_dispatch(Solver)]
 pub trait Solve {
-    fn solve(&self, puzzle_part: PuzzlePart) -> String;
+    fn solve(&self, puzzle_part: PuzzlePart) -> Result<String>;
 }
 
 impl Solver {
     pub fn from_file(path: &Path, day: u16) -> Result<Self> {
-        let file = File::open(path)?;
+        let file = File::open(path).wrap_err_with(|| format!("Cannot open file '{}'", path.display()))?;
         let reader = BufReader::new(file);
 
         let solver = match day {
