@@ -36,6 +36,7 @@ pub enum Solver {
     Day03(day03::Solver),
     Day04(day04::Solver),
     Day05(day05::Solver),
+    Day06(day06::Solver),
 }
 
 #[enum_dispatch(Solver)]
@@ -54,6 +55,7 @@ impl Solver {
             3 => day03::Solver::from_reader(reader)?.into(),
             4 => day04::Solver::from_reader(reader)?.into(),
             5 => day05::Solver::from_reader(reader)?.into(),
+            6 => day06::Solver::from_reader(reader)?.into(),
             _ => return Err(Error::UnimplementedDay(day)),
         };
 
