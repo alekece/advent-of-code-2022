@@ -25,15 +25,25 @@ impl Solver {
 
 impl Solver {
     pub fn from_reader<R: Read>(reader: BufReader<R>) -> Result<Self> {
-        let signal = reader
+        let mut signals = reader
             .lines()
-            .take(1)
             .map(|line| Ok(line?.chars().map(|c| c as u8).collect::<Vec<_>>()))
-            .collect::<Result<Vec<_>>>()?
-            .pop()
-            .ok_or_else(|| Error::InvalidInput("missing signal".to_string()))?;
+            .collect::<Result<Vec<_>>>()?;
 
-        Ok(Self { signal })
+        match signals.len() {
+            0 => Err(Error::EmptyInput),
+            1 => {
+                Ok(Self {
+                    signal: signals.pop().unwrap(),
+                })
+            }
+            _ => {
+                Err(Error::InvalidInput(format!(
+                    "expected only one signal (got {} signals)",
+                    signals.len()
+                )))
+            }
+        }
     }
 }
 

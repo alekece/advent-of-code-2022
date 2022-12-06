@@ -110,9 +110,12 @@ impl FromStr for Round {
     type Err = Error;
 
     fn from_str(s: &str) -> Result<Self> {
-        s.split_once(' ')
-            .ok_or_else(|| Error::InvalidInput(format!("wrong round: expected '{{A|B|C}} {{X|Y|Z}}' (got '{s}'")))
-            .and_then(|(a, b)| Ok(Self(a.parse()?, b.parse()?)))
+        let round = s.split(' ').collect::<Vec<_>>();
+
+        (round.len() == 2)
+            .then(|| Ok(Self(round[0].parse()?, round[1].parse()?)))
+            .ok_or_else(|| Error::InvalidInput(format!("wrong round: expected '{{A|B|C}} {{X|Y|Z}}' (got '{s}')")))
+            .flatten()
     }
 }
 

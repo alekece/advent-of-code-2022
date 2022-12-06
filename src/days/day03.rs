@@ -3,6 +3,8 @@ use std::fmt;
 use std::io::{BufRead, BufReader, Read};
 use std::str::FromStr;
 
+use eyre::Context;
+
 use crate::solver::{Error, PuzzlePart, Result, Solve};
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
@@ -44,12 +46,18 @@ impl FromStr for Rucksack {
     fn from_str(s: &str) -> Result<Self> {
         if s.len() & 1 != 0 {
             return Err(Error::InvalidInput(format!(
-                "wrong rucksack: expected list of items (got '{s}')"
+                "wrong rucksack: expected list with even number of items (got '{s}')"
             )));
         }
 
         let half_len = s.len() / 2;
-        let items = s.chars().map(Item::try_from).collect::<Result<Vec<_>>>()?;
+        let items = s
+            .chars()
+            .map(|c| {
+                Ok(Item::try_from(c)
+                    .wrap_err_with(|| Error::InvalidInput(format!("rucksack '{s}' contains invalid items")))?)
+            })
+            .collect::<Result<Vec<_>>>()?;
         let compartments = [
             items[0..half_len].iter().copied().collect(),
             items[half_len..].iter().copied().collect(),

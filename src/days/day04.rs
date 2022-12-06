@@ -2,6 +2,8 @@ use std::io::{BufRead, BufReader, Read};
 use std::ops::RangeInclusive;
 use std::str::FromStr;
 
+use eyre::Context;
+
 use crate::solver::{Error, PuzzlePart, Result, Solve};
 
 #[derive(Debug, Clone)]
@@ -22,7 +24,17 @@ impl FromStr for Section {
 
     fn from_str(s: &str) -> Result<Self> {
         match s.split_once('-') {
-            Some((a, b)) => Ok(Self(a.parse()?..=b.parse()?)),
+            Some((start, end)) => {
+                let start = start
+                    .parse()
+                    .wrap_err_with(|| format!("start section must be a valid unsigned integer (got '{start}')"))?;
+
+                let end = end
+                    .parse()
+                    .wrap_err_with(|| format!("end section must be a valid unsigned integer (got '{end}')"))?;
+
+                Ok(Self(start..=end))
+            }
             None => {
                 Err(Error::InvalidInput(format!(
                     "wrong section: expected '{{0-9}}+-{{0-9}}+' (got '{s}')"
@@ -50,10 +62,17 @@ impl FromStr for PeerCleaning {
 
     fn from_str(s: &str) -> Result<Self> {
         match s.split_once(',') {
-            Some((a, b)) => Ok(Self(a.parse()?, b.parse()?)),
+            Some((a, b)) => {
+                Ok(Self(
+                    a.parse()
+                        .wrap_err_with(|| Error::InvalidInput(format!("peer cleaning '{s}' is malformed")))?,
+                    b.parse()
+                        .wrap_err_with(|| Error::InvalidInput(format!("peer cleaning '{s}' is malformed")))?,
+                ))
+            }
             None => {
                 Err(Error::InvalidInput(format!(
-                    "invalid peer cleaning: expected '{{0-9}}+-{{0-9}},{{0-9}}+-{{0-9}}+' (got '{s}')"
+                    "wrong peer cleaning: expected '{{0-9}}+-{{0-9}},{{0-9}}+-{{0-9}}+' (got '{s}')"
                 )))
             }
         }
@@ -72,11 +91,7 @@ impl Solver {
             .map(|line| line?.parse())
             .collect::<Result<Vec<_>>>()?;
 
-        if peer_cleanings.is_empty() {
-            Err(Error::EmptyInput)
-        } else {
-            Ok(Self { peer_cleanings })
-        }
+        Ok(Self { peer_cleanings })
     }
 }
 

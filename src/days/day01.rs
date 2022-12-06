@@ -11,12 +11,21 @@ pub struct Elf {
 }
 
 impl Elf {
-    pub fn total_calories(&self) -> usize {
-        self.foods.iter().sum()
+    pub fn total_calories(&self) -> Result<usize> {
+        self.foods.iter().fold(Ok(0), |acc, b| {
+            acc.and_then(|a| {
+                a.checked_add(*b)
+                    .ok_or_else(|| Error::NoSolution("cannot compute total calories: integer overflow".to_string()))
+            })
+        })
     }
 
     pub fn add_food(&mut self, calories: usize) {
         self.foods.push(calories);
+    }
+
+    pub fn has_foods(&self) -> bool {
+        !self.foods.is_empty()
     }
 }
 
@@ -33,7 +42,7 @@ impl Solver {
                 .fold(Ok::<_, Error>(vec![Elf::default()]), |elves, line| {
                     let (mut elves, line) = (elves?, line?);
 
-                    if line.is_empty() {
+                    if line.is_empty() || elves.is_empty() {
                         elves.push(Elf::default());
                     } else {
                         // 'unwrap' call is safe since there is always at least
@@ -48,7 +57,9 @@ impl Solver {
                     Ok(elves)
                 })?;
 
-        if elves.is_empty() {
+        // `elves` vector will always contains at least one elf group then
+        // having one elf with no food means the input was empty.
+        if elves.len() == 1 && !elves[0].has_foods() {
             Err(Error::EmptyInput)
         } else {
             Ok(Self { elves })
@@ -58,11 +69,11 @@ impl Solver {
 
 impl Solve for Solver {
     fn solve(&self, puzzle_part: PuzzlePart) -> Result<String> {
-        let calories = self.elves.iter().map(Elf::total_calories);
+        let calories = self.elves.iter().map(Elf::total_calories).collect::<Result<Vec<_>>>()?;
 
         let solution = match puzzle_part {
-            PuzzlePart::One => calories.max().unwrap_or_default().to_string(),
-            PuzzlePart::Two => calories.sorted().rev().take(3).sum::<usize>().to_string(),
+            PuzzlePart::One => calories.into_iter().max().unwrap_or_default().to_string(),
+            PuzzlePart::Two => calories.into_iter().sorted().rev().take(3).sum::<usize>().to_string(),
         };
 
         Ok(solution)

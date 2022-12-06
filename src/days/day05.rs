@@ -40,8 +40,16 @@ impl FromStr for Instruction {
     fn from_str(s: &str) -> Result<Self> {
         const TOKENS: &[Option<&'static str>] = &[Some("move"), None, Some("from"), None, Some("to"), None];
 
-        let values = s
-            .split_whitespace()
+        let values = s.split_whitespace().collect::<Vec<_>>();
+
+        if values.len() != 6 {
+            return Err(Error::InvalidInput(format!(
+                "wrong instruction: expected 'move {{0-9}}+ from {{0-9}}+ to {{0-9}}+' (got '{s}')"
+            )));
+        }
+
+        let values = values
+            .into_iter()
             .enumerate()
             .filter_map(|(i, s)| {
                 match TOKENS[i] {
@@ -52,7 +60,7 @@ impl FromStr for Instruction {
                     }
                     None => Some(s.parse::<usize>()
                                     .wrap_err_with(||
-                                       format!("wrong instruction: quantity or stack indice must be a valid unsigned integer value (got '{s}')")
+                                       Error::InvalidInput(format!("wrong instruction: quantity or stack indice must be a valid unsigned integer value (got '{s}')"))
                                     )
                                     .map_err(Into::into)),
                     _ => None,
@@ -60,17 +68,11 @@ impl FromStr for Instruction {
             })
             .collect::<Result<Vec<_>>>()?;
 
-        if values.len() != 3 {
-            Err(Error::InvalidInput(format!(
-                "wrong instruction: expected 'move {{0-9}}+ from {{0-9}}+ to {{0-9}}+' (got '{s}')"
-            )))
-        } else {
-            Ok(Self {
-                quantity: values[0],
-                from_stack: values[1],
-                to_stack: values[2],
-            })
-        }
+        Ok(Self {
+            quantity: values[0],
+            from_stack: values[1],
+            to_stack: values[2],
+        })
     }
 }
 
@@ -129,7 +131,7 @@ impl Solver {
         let instructions = instructions
             .into_iter()
             // skips empty separator line
-            .skip(1)
+            .filter(|line| !line.is_empty())
             .map(|line| line.parse())
             .collect::<Result<Vec<_>>>()?;
 
@@ -142,11 +144,11 @@ impl Solver {
         for instruction in self.instructions.iter() {
             let stack = stacks
                 .get_mut(&instruction.from_stack)
-                .ok_or_else(|| Error::NoSolution(format!("stack '{}' does not exist", instruction.from_stack)))?;
+                .ok_or_else(|| Error::NoSolution(format!("source stack '{}' does not exist", instruction.from_stack)))?;
 
             if stack.len() < instruction.quantity {
                 return Err(Error::NoSolution(format!(
-                    "cannot move {0} crate(s) from stack '{1}': stack '{1}' contains only {2} crate(s)",
+                    "cannot move {} crate(s) from stack '{}': stack contains only {} crate(s)",
                     instruction.quantity,
                     instruction.from_stack,
                     stack.len()
@@ -157,7 +159,7 @@ impl Solver {
 
             let stack = stacks
                 .get_mut(&instruction.to_stack)
-                .ok_or_else(|| Error::NoSolution(format!("stack '{}' does not exist", instruction.to_stack)))?;
+                .ok_or_else(|| Error::NoSolution(format!("destination stack '{}' does not exist", instruction.to_stack)))?;
 
             stack.append(&mut crates);
         }
