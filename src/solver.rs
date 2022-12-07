@@ -18,6 +18,8 @@ pub enum Error {
     IoError(#[from] io::Error),
     #[error(transparent)]
     ParseIntError(#[from] num::ParseIntError),
+    #[error(transparent)]
+    ParseBigIntError(#[from] num_bigint::ParseBigIntError),
     #[error("Unimplemented day {0}")]
     UnimplementedDay(u16),
     #[error("Invalid input: {0}")]
@@ -44,6 +46,7 @@ pub enum Solver {
     Day04(day04::Solver),
     Day05(day05::Solver),
     Day06(day06::Solver),
+    Day07(day07::Solver),
 }
 
 #[enum_dispatch(Solver)]
@@ -63,6 +66,7 @@ impl Solver {
             4 => day04::Solver::from_reader(reader)?.into(),
             5 => day05::Solver::from_reader(reader)?.into(),
             6 => day06::Solver::from_reader(reader)?.into(),
+            7 => day07::Solver::from_reader(reader)?.into(),
             _ => return Err(Error::UnimplementedDay(day)),
         };
 
