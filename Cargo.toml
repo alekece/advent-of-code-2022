@@ -11,3 +11,5 @@ color-eyre = "0.6.2"
 clap = { version = "4.0.29", features = ["derive"] }
 itertools = "0.10.5"
 enum_dispatch = "0.3.8"
+num-bigint = "0.4.3"
+num-traits = "0.2.15"

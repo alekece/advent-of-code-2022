@@ -2,25 +2,22 @@ use std::io::{BufRead, BufReader, Read};
 
 use eyre::Context;
 use itertools::Itertools;
+use num_bigint::BigUint;
+use num_traits::identities::Zero;
 
 use crate::solver::{Error, PuzzlePart, Result, Solve};
 
 #[derive(Debug, Default)]
 pub struct Elf {
-    foods: Vec<usize>,
+    foods: Vec<BigUint>,
 }
 
 impl Elf {
-    pub fn total_calories(&self) -> Result<usize> {
-        self.foods.iter().fold(Ok(0), |acc, b| {
-            acc.and_then(|a| {
-                a.checked_add(*b)
-                    .ok_or_else(|| Error::NoSolution("cannot compute total calories: integer overflow".to_string()))
-            })
-        })
+    pub fn total_calories(&self) -> BigUint {
+        self.foods.iter().fold(BigUint::zero(), |acc, value| acc + value)
     }
 
-    pub fn add_food(&mut self, calories: usize) {
+    pub fn add_food(&mut self, calories: BigUint) {
         self.foods.push(calories);
     }
 
@@ -69,11 +66,11 @@ impl Solver {
 
 impl Solve for Solver {
     fn solve(&self, puzzle_part: PuzzlePart) -> Result<String> {
-        let calories = self.elves.iter().map(Elf::total_calories).collect::<Result<Vec<_>>>()?;
+        let calories = self.elves.iter().map(Elf::total_calories).collect::<Vec<_>>();
 
         let solution = match puzzle_part {
             PuzzlePart::One => calories.into_iter().max().unwrap_or_default().to_string(),
-            PuzzlePart::Two => calories.into_iter().sorted().rev().take(3).sum::<usize>().to_string(),
+            PuzzlePart::Two => calories.into_iter().sorted().rev().take(3).sum::<BigUint>().to_string(),
         };
 
         Ok(solution)
