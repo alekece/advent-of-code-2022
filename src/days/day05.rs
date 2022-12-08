@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::io::{BufRead, BufReader, Read};
 use std::str::FromStr;
 
@@ -8,13 +8,13 @@ use itertools::Itertools;
 use crate::solver::{Error, PuzzlePart, Result, Solve};
 
 pub trait CrateMover {
-    fn grab_crates(&self, stack: &mut Vec<char>, quantity: usize) -> Vec<char>;
+    fn grab_crates(&self, stack: &mut VecDeque<char>, quantity: usize) -> VecDeque<char>;
 }
 
 pub struct CrateMover9000;
 
 impl CrateMover for CrateMover9000 {
-    fn grab_crates(&self, stack: &mut Vec<char>, quantity: usize) -> Vec<char> {
+    fn grab_crates(&self, stack: &mut VecDeque<char>, quantity: usize) -> VecDeque<char> {
         stack.drain(stack.len() - quantity..).rev().collect()
     }
 }
@@ -22,7 +22,7 @@ impl CrateMover for CrateMover9000 {
 pub struct CrateMover9001;
 
 impl CrateMover for CrateMover9001 {
-    fn grab_crates(&self, stack: &mut Vec<char>, quantity: usize) -> Vec<char> {
+    fn grab_crates(&self, stack: &mut VecDeque<char>, quantity: usize) -> VecDeque<char> {
         stack.drain(stack.len() - quantity..).collect()
     }
 }
@@ -77,7 +77,8 @@ impl FromStr for Instruction {
 }
 
 pub struct Solver {
-    stacks: HashMap<usize, Vec<char>>,
+    stacks: HashMap<usize, VecDeque<char>>,
+    indices: HashMap<usize, usize>,
     instructions: Vec<Instruction>,
 }
 
@@ -91,9 +92,7 @@ impl Solver {
             .collect::<Result<Vec<_>>>()?
             .into_iter()
             .partition(|line| {
-                if line.is_empty() {
-                    is_stack = false;
-                }
+                is_stack &= !line.is_empty();
 
                 is_stack
             });
@@ -102,31 +101,60 @@ impl Solver {
             return Err(Error::EmptyInput);
         }
 
-        let stacks = stacks
-            .into_iter()
-            .flat_map(|line| {
-                let mut counter = 0;
+        let splitter = |step_by: usize| {
+            let mut counter = 0;
 
-                line.split(|_| {
-                    counter += 1;
+            move |_| {
+                counter += 1;
 
-                    counter % 4 == 0
-                })
-                .enumerate()
-                .filter_map(|(key, s)| {
-                    match s.as_bytes() {
-                        [b'[', c, b']'] => Some((key, *c as char)),
-                        _ => None,
+                counter % step_by == 0
+            }
+        };
+
+        let indices = stacks[stacks.len() - 1]
+            .split(splitter(4))
+            .enumerate()
+            .map(|(i, s)| {
+                match s.as_bytes() {
+                    [b' ', key @ b'0'..=b'9', b' '] => Ok(((*key - b'0') as usize, i)),
+                    [b' ', key @ b'0'..=b'9'] => Ok(((*key - b'0') as usize, i)),
+                    _ => {
+                        Err(Error::InvalidInput(format!(
+                            "wrong indice: expected ' [0-9] ' (got '{s}')"
+                        )))
                     }
-                })
-                .collect::<Vec<_>>()
+                }
             })
-            .rev()
-            .fold(HashMap::<usize, Vec<char>>::default(), |mut acc, (key, c)| {
-                acc.entry(key + 1).or_default().push(c);
+            .collect::<Result<HashMap<usize, usize>>>()?;
 
-                acc
-            });
+        let stacks = stacks[..stacks.len() - 1]
+            .iter()
+            .flat_map(|line| {
+                line.split(splitter(4))
+                    .enumerate()
+                    .filter_map(|(i, s)| {
+                        match s.as_bytes() {
+                            [b'[', c, b']'] => Some((i, Some(*c as char))),
+                            [b' ', b' ', b' '] => Some((i, None)),
+                            _ => None,
+                        }
+                    })
+                    .collect::<Vec<_>>()
+            })
+            .fold(Ok(HashMap::<usize, VecDeque<char>>::default()), |stacks, (key, c)| {
+                let mut stacks = stacks?;
+                let stack = stacks.entry(key).or_default();
+
+                if let Some(c) = c {
+                    stack.push_front(c);
+                } else if !stack.is_empty() {
+                    return Err(Error::InvalidInput(
+                        "wrong stack: floating crate(s) detected".to_string(),
+                    ));
+                }
+
+                Ok(stacks)
+            })?;
 
         let instructions = instructions
             .into_iter()
@@ -135,16 +163,24 @@ impl Solver {
             .map(|line| line.parse())
             .collect::<Result<Vec<_>>>()?;
 
-        Ok(Self { stacks, instructions })
+        Ok(Self {
+            stacks,
+            instructions,
+            indices,
+        })
     }
 
-    pub fn move_crates(&self, mover: impl CrateMover) -> Result<HashMap<usize, Vec<char>>> {
+    pub fn move_crates(&self, mover: impl CrateMover) -> Result<HashMap<usize, VecDeque<char>>> {
         let mut stacks = self.stacks.clone();
 
         for instruction in self.instructions.iter() {
-            let stack = stacks
-                .get_mut(&instruction.from_stack)
-                .ok_or_else(|| Error::NoSolution(format!("source stack '{}' does not exist", instruction.from_stack)))?;
+            let stack = self
+                .indices
+                .get(&instruction.from_stack)
+                .and_then(|i| stacks.get_mut(i))
+                .ok_or_else(|| {
+                    Error::NoSolution(format!("source stack '{}' does not exist", instruction.from_stack))
+                })?;
 
             if stack.len() < instruction.quantity {
                 return Err(Error::NoSolution(format!(
@@ -157,9 +193,13 @@ impl Solver {
 
             let mut crates = mover.grab_crates(stack, instruction.quantity);
 
-            let stack = stacks
-                .get_mut(&instruction.to_stack)
-                .ok_or_else(|| Error::NoSolution(format!("destination stack '{}' does not exist", instruction.to_stack)))?;
+            let stack = self
+                .indices
+                .get(&instruction.to_stack)
+                .and_then(|i| stacks.get_mut(i))
+                .ok_or_else(|| {
+                    Error::NoSolution(format!("destination stack '{}' does not exist", instruction.to_stack))
+                })?;
 
             stack.append(&mut crates);
         }
@@ -178,7 +218,7 @@ impl Solve for Solver {
         Ok(stacks
             .into_iter()
             .sorted_by_key(|(key, _)| *key)
-            .filter_map(|(_, crates)| crates.last().copied())
+            .filter_map(|(_, crates)| crates.back().copied())
             .collect())
     }
 }
