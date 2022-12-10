@@ -18,7 +18,11 @@ impl CommandFactory {
         match tokens.as_slice() {
             ["cd", target] => Ok(Box::new(ChangeDirectory::new(target.to_string()))),
             ["ls"] => Ok(Box::<ListDirectory>::default()),
-            ["cd"] => Err(Error::InvalidInput("wrong cd command: missing target directory".to_string())) ,
+            ["cd"] => {
+                Err(Error::InvalidInput(
+                    "wrong cd command: missing target directory".to_string(),
+                ))
+            }
             [command, ..] => Err(Error::InvalidInput(format!("unknown command '{command}'"))),
             [] => Err(Error::InvalidInput("missing command".to_string())),
         }
