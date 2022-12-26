@@ -1,0 +1,5 @@
+Play = @{ ("A"|"B"|"C") }
+Action = @{ ("X"|"Y"|"Z") }
+Round = { Play ~ " " ~ Action ~ NEWLINE }
+Input = { SOI ~ Round+ ~ EOI }
+
