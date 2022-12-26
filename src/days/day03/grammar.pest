@@ -1,0 +1,3 @@
+Item = { ASCII_ALPHA }
+Rucksack = { (Item ~ Item)+ ~ NEWLINE }
+Input = { SOI ~ Rucksack+ ~ EOI }

@@ -1,9 +1,9 @@
 use std::collections::HashSet;
 use std::fmt;
-use std::io::{BufRead, BufReader, Read};
-use std::str::FromStr;
+use std::io::{self, Read};
 
-use eyre::Context;
+use pest::Parser;
+use pest_derive::Parser;
 
 use crate::solver::{Error, PuzzlePart, Result, Solve};
 
@@ -20,51 +20,9 @@ impl Item {
     }
 }
 
-impl TryFrom<char> for Item {
-    type Error = Error;
-
-    fn try_from(c: char) -> Result<Self> {
-        match c {
-            'a'..='z' | 'A'..='Z' => Ok(Self(c as u8)),
-            _ => {
-                Err(Error::InvalidInput(format!(
-                    "wrong item: expected '{{a-z|A-Z}}' (got '{c}')"
-                )))
-            }
-        }
-    }
-}
-
 pub struct Rucksack {
     items: Vec<Item>,
     compartments: [HashSet<Item>; 2],
-}
-
-impl FromStr for Rucksack {
-    type Err = Error;
-
-    fn from_str(s: &str) -> Result<Self> {
-        if s.len() & 1 != 0 {
-            return Err(Error::InvalidInput(format!(
-                "wrong rucksack: expected list with even number of items (got '{s}')"
-            )));
-        }
-
-        let half_len = s.len() / 2;
-        let items = s
-            .chars()
-            .map(|c| {
-                Ok(Item::try_from(c)
-                    .wrap_err_with(|| Error::InvalidInput(format!("rucksack '{s}' contains invalid items")))?)
-            })
-            .collect::<Result<Vec<_>>>()?;
-        let compartments = [
-            items[0..half_len].iter().copied().collect(),
-            items[half_len..].iter().copied().collect(),
-        ];
-
-        Ok(Self { items, compartments })
-    }
 }
 
 impl fmt::Display for Rucksack {
@@ -87,21 +45,44 @@ impl Rucksack {
     }
 }
 
+#[derive(Parser)]
+#[grammar = "days/day03/grammar.pest"]
 pub struct Solver {
     rucksacks: Vec<Rucksack>,
 }
 
 impl Solver {
-    pub fn from_reader<R: Read>(reader: BufReader<R>) -> Result<Self> {
-        let rucksacks = reader
-            .lines()
-            .into_iter()
-            .map(|line| line?.parse())
-            .collect::<Result<Vec<_>>>()?;
+    pub fn from_reader(reader: impl Read) -> Result<Self> {
+        let input = io::read_to_string(reader)?;
 
-        if rucksacks.is_empty() {
-            Err(Error::EmptyInput)
-        } else if rucksacks.len() % 3 != 0 {
+        let tokens = Self::parse(Rule::Input, &input)
+            .map_err(|e| Error::InvalidInput(e.to_string()))?
+            .next()
+            .unwrap();
+
+        let rucksacks = tokens
+            .into_inner()
+            .filter_map(|token| {
+                if let Rule::Rucksack = token.as_rule() {
+                    let items = token
+                        .into_inner()
+                        .map(|v| Item(v.as_str().chars().next().unwrap() as u8))
+                        .collect::<Vec<Item>>();
+
+                    let pivot = items.len() / 2;
+                    let compartments = [
+                        items[0..pivot].iter().copied().collect(),
+                        items[pivot..].iter().copied().collect(),
+                    ];
+
+                    Some(Rucksack { items, compartments })
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<_>>();
+
+        if rucksacks.len() % 3 != 0 {
             Err(Error::InvalidInput(
                 "each elf group must strictly contain 3 members".to_string(),
             ))
