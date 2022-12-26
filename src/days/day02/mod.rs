@@ -1,5 +1,4 @@
 use std::io::{self, Read};
-use std::str::FromStr;
 
 use pest::Parser;
 use pest_derive::Parser;
