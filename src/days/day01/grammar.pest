@@ -1,0 +1,4 @@
+Number = @{ ASCII_NONZERO_DIGIT ~ ASCII_DIGIT* }
+Calory = _{ Number  ~ NEWLINE }
+Elf = { Calory+ ~ NEWLINE? }
+Input = { SOI ~ Elf+ ~ EOI }
